@@ -1,62 +1,76 @@
+@Library('your-shared-library-name') _
+
 pipeline {
     agent any
-
+    
+    environment {
+        MLFLOW_TRACKING_URI = 'http://localhost:5000'
+    }
+    
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Build') {
-            when {
-                branch 'dev'
-            }
-            steps {
-                echo 'Building for dev branch...'
-                // Add build steps here
-            }
-        }
-
-        stage('Test') {
-            when {
-                branch 'dev'
-            }
-            steps {
-                echo 'Testing on dev branch...'
-                // Add test steps here
-            }
-        }
-
-        stage('Deploy') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo 'Deploying main branch...'
-                // Add deployment steps here
-            }
-        }
-
-        stage('Release Tag') {
-            when {
-                branch 'main'
-            }
+        stage('Determine Environment') {
             steps {
                 script {
-                    def commitHash = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
-                    def tagName = "release-${env.BUILD_NUMBER}"
-                    sh "git tag -a ${tagName} -m 'Release tag for build ${env.BUILD_NUMBER}' ${commitHash}"
-                    sh "git push origin ${tagName}"
-                    echo "Tag ${tagName} created and pushed."
+                    if (env.BRANCH_NAME == 'dev') {
+                        env.DEPLOY_ENV = 'dev'
+                    } else if (env.BRANCH_NAME == 'main') {
+                        env.DEPLOY_ENV = 'preprod'
+                    } else if (env.TAG_NAME) {
+                        env.DEPLOY_ENV = 'prod'
+                    } else {
+                        error "Unknown branch/tag"
+                    }
                 }
             }
         }
-    }
-
-    post {
-        always {
-            echo 'Pipeline execution completed!'
+        
+        stage('Train Model') {
+            when { 
+                expression { env.DEPLOY_ENV == 'dev' }
+            }
+            steps {
+                script {
+                    try {
+                        modelTrain()
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILURE'
+                        emailNotification('FAILED', env.DEPLOY_ENV)
+                        error "Model training failed: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+        
+        stage('Test Model') {
+            when {
+                expression { env.DEPLOY_ENV in ['dev', 'preprod'] }
+            }
+            steps {
+                script {
+                    try {
+                        modelTest(env.DEPLOY_ENV)
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILURE'
+                        emailNotification('FAILED', env.DEPLOY_ENV)
+                        error "Model testing failed: ${e.getMessage()}"
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy Model') {
+            steps {
+                script {
+                    try {
+                        modelDeploy(env.DEPLOY_ENV)
+                        emailNotification('SUCCESS', env.DEPLOY_ENV)
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILURE'
+                        emailNotification('FAILED', env.DEPLOY_ENV)
+                        error "Model deployment failed: ${e.getMessage()}"
+                    }
+                }
+            }
         }
     }
 }
