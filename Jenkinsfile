@@ -5,9 +5,23 @@ pipeline {
     
     environment {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
+        PYTHON_VENV = 'mldenv'
     }
     
     stages {
+        stage('Setup Environment') {
+            steps {
+                script {
+                    // Create virtual environment if it doesn't exist
+                    sh """
+                        if [ ! -d "${WORKSPACE}/${PYTHON_VENV}" ]; then
+                            python3 -m venv ${PYTHON_VENV}
+                        fi
+                    """
+                }
+            }
+        }
+        
         stage('Determine Environment') {
             steps {
                 script {
@@ -33,7 +47,6 @@ pipeline {
                     try {
                         modelTrain()
                     } catch (Exception e) {
-                        currentBuild.result = 'FAILURE'
                         emailNotification('FAILED', env.DEPLOY_ENV)
                         error "Model training failed: ${e.getMessage()}"
                     }
@@ -50,7 +63,6 @@ pipeline {
                     try {
                         modelTest(env.DEPLOY_ENV)
                     } catch (Exception e) {
-                        currentBuild.result = 'FAILURE'
                         emailNotification('FAILED', env.DEPLOY_ENV)
                         error "Model testing failed: ${e.getMessage()}"
                     }
@@ -65,12 +77,17 @@ pipeline {
                         modelDeploy(env.DEPLOY_ENV)
                         emailNotification('SUCCESS', env.DEPLOY_ENV)
                     } catch (Exception e) {
-                        currentBuild.result = 'FAILURE'
                         emailNotification('FAILED', env.DEPLOY_ENV)
                         error "Model deployment failed: ${e.getMessage()}"
                     }
                 }
             }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
         }
     }
 }
