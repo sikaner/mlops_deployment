@@ -5,80 +5,102 @@ pipeline {
     
     environment {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
-        PYTHON_VENV = 'mldenv'
+        VIRTUAL_ENV = "${WORKSPACE}/mldenv"
+        PATH = "${VIRTUAL_ENV}/bin:${PATH}"
     }
     
     stages {
-        stage('Setup Environment') {
+        stage('Setup') {
             steps {
-                script {
-                    // Create virtual environment if it doesn't exist
-                    sh """
-                        if [ ! -d "${WORKSPACE}/${PYTHON_VENV}" ]; then
-                            python3 -m venv ${PYTHON_VENV}
-                        fi
-                    """
-                }
+                sh """
+                    python -m venv mldenv || true
+                    source mldenv/bin/activate
+                    pip install -r requirements.txt
+                """
             }
         }
         
-        stage('Determine Environment') {
-            steps {
-                script {
-                    if (env.BRANCH_NAME == 'dev') {
-                        env.DEPLOY_ENV = 'dev'
-                    } else if (env.BRANCH_NAME == 'main') {
-                        env.DEPLOY_ENV = 'preprod'
-                    } else if (env.TAG_NAME) {
-                        env.DEPLOY_ENV = 'prod'
-                    } else {
-                        error "Unknown branch/tag"
+        stage('Development Pipeline') {
+            when { branch 'dev' }
+            stages {
+                stage('Train') {
+                    steps {
+                        trainModel()
+                    }
+                }
+                stage('Test') {
+                    steps {
+                        testModel('Challenger')
+                    }
+                }
+                stage('Deploy to Dev') {
+                    steps {
+                        deployModel('Challenger', 'Development')
+                    }
+                }
+                stage('Notify') {
+                    steps {
+                        notifyEmail('Development Pipeline Complete')
                     }
                 }
             }
         }
         
-        stage('Train Model') {
-            when { 
-                expression { env.DEPLOY_ENV == 'dev' }
-            }
-            steps {
-                script {
-                    try {
-                        modelTrain()
-                    } catch (Exception e) {
-                        emailNotification('FAILED', env.DEPLOY_ENV)
-                        error "Model training failed: ${e.getMessage()}"
+        stage('Pre-prod Pipeline') {
+            when { branch 'main' }
+            stages {
+                stage('Load and Test') {
+                    steps {
+                        testModel('Challenger')
+                    }
+                }
+                stage('Update Alias') {
+                    steps {
+                        deployModel('Challenger', 'Staging')
+                        script {
+                            // Update alias to Challenger-post-test
+                            sh """
+                                source mldenv/bin/activate
+                                python -c "
+                                import mlflow
+                                client = mlflow.tracking.MlflowClient()
+                                model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
+                                client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
+                                "
+                            """
+                        }
+                    }
+                }
+                stage('Notify') {
+                    steps {
+                        notifyEmail('Pre-production Pipeline Complete')
                     }
                 }
             }
         }
         
-        stage('Test Model') {
-            when {
-                expression { env.DEPLOY_ENV in ['dev', 'preprod'] }
-            }
-            steps {
-                script {
-                    try {
-                        modelTest(env.DEPLOY_ENV)
-                    } catch (Exception e) {
-                        emailNotification('FAILED', env.DEPLOY_ENV)
-                        error "Model testing failed: ${e.getMessage()}"
+        stage('Production Pipeline') {
+            when { tag "release-*" }
+            stages {
+                stage('Deploy to Production') {
+                    steps {
+                        script {
+                            deployModel('Challenger-post-test', 'Production')
+                            sh """
+                                source mldenv/bin/activate
+                                python -c "
+                                import mlflow
+                                client = mlflow.tracking.MlflowClient()
+                                model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
+                                client.set_registered_model_alias('iris_model', 'Champion', model_version)
+                                "
+                            """
+                        }
                     }
                 }
-            }
-        }
-        
-        stage('Deploy Model') {
-            steps {
-                script {
-                    try {
-                        modelDeploy(env.DEPLOY_ENV)
-                        emailNotification('SUCCESS', env.DEPLOY_ENV)
-                    } catch (Exception e) {
-                        emailNotification('FAILED', env.DEPLOY_ENV)
-                        error "Model deployment failed: ${e.getMessage()}"
+                stage('Notify') {
+                    steps {
+                        notifyEmail('Production Pipeline Complete')
                     }
                 }
             }
@@ -86,8 +108,8 @@ pipeline {
     }
     
     post {
-        always {
-            cleanWs()
+        failure {
+            notifyEmail('Pipeline Failed')
         }
     }
 }
