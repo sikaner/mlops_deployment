@@ -1,44 +1,31 @@
 import mlflow
-import mlflow.sklearn
+import numpy as np
 from sklearn.datasets import load_iris
 from sklearn.metrics import accuracy_score
-import sys
+import os
 
-def test_model(environment):
-    mlflow.set_tracking_uri("http://localhost:5000")
-    client = mlflow.tracking.MlflowClient()
-    
-    # Load the appropriate model based on environment
-    if environment == "dev":
-        model_alias = "Challenger"
-    elif environment == "preprod":
-        model_alias = "Challenger-pre-test"
-    else:
-        raise ValueError("Invalid environment specified")
-    
-    # Load model
-    model = mlflow.sklearn.load_model(f"models:/iris_classifier@{model_alias}")
-    
+def test_model(model_alias):
     # Load test data
     iris = load_iris()
-    X_test = iris.data
-    y_test = iris.target
+    X_test = iris.data[::3]  # Use every third sample for testing
+    y_test = iris.target[::3]
+    
+    # Load model from MLflow
+    mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI', 'http://localhost:5000'))
+    model = mlflow.pyfunc.load_model(f"models:/iris_model@{model_alias}")
     
     # Make predictions
-    predictions = model.predict(X_test)
-    accuracy = accuracy_score(y_test, predictions)
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
     
-    # Define threshold based on environment
-    threshold = 0.9 if environment == "preprod" else 0.8
+    # Define threshold
+    ACCURACY_THRESHOLD = 0.9
     
-    if accuracy >= threshold:
-        print(f"Test passed with accuracy: {accuracy}")
-        return True
-    else:
-        print(f"Test failed. Accuracy {accuracy} below threshold {threshold}")
-        return False
+    if accuracy < ACCURACY_THRESHOLD:
+        raise Exception(f"Model accuracy {accuracy:.4f} below threshold {ACCURACY_THRESHOLD}")
+        
+    return accuracy
 
 if __name__ == "__main__":
-    environment = sys.argv[1]
-    success = test_model(environment)
-    sys.exit(0 if success else 1)
+    accuracy = test_model("Challenger")
+    print(f"Test accuracy: {accuracy:.4f}")

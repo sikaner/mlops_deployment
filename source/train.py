@@ -1,5 +1,5 @@
 import mlflow
-import mlflow.sklearn
+import pandas as pd
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -7,47 +7,48 @@ from sklearn.metrics import accuracy_score
 import os
 
 def train_model():
-    # Set MLflow tracking URI
-    mlflow.set_tracking_uri("http://localhost:5000")
+    # Load and prepare data
+    iris = load_iris()
+    X = pd.DataFrame(iris.data, columns=iris.feature_names)
+    y = iris.target
     
-    # Start MLflow run
-    with mlflow.start_run(run_name="dev_training") as run:
-        # Load data
-        iris = load_iris()
-        
-        X = iris.data
-        y = iris.target
-        
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        # Train model
-        rf = RandomForestClassifier(n_estimators=100, random_state=42)
-        rf.fit(X_train, y_train)
-        
-        # Make predictions and calculate accuracy
-        predictions = rf.predict(X_test)
-        accuracy = accuracy_score(y_test, predictions)
-        
-        # Log parameters and metrics
+    # Split the data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Initialize and train model
+    rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf_model.fit(X_train, y_train)
+    
+    # Make predictions and calculate metrics
+    y_pred = rf_model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    
+    # Log with MLflow
+    mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI', 'http://localhost:5000'))
+    mlflow.set_experiment("iris-classification")
+    
+    with mlflow.start_run() as run:
+        # Log parameters
         mlflow.log_param("n_estimators", 100)
+        
+        # Log metrics
         mlflow.log_metric("accuracy", accuracy)
         
-        # Register model
-        mlflow.sklearn.log_model(rf, "model")
+        # Log model
+        mlflow.sklearn.log_model(
+            rf_model, 
+            "model",
+            registered_model_name="iris_model"
+        )
         
-        # Register model in MLflow Model Registry
-        model_uri = f"runs:/{run.info.run_id}/model"
-        model_details = mlflow.register_model(model_uri, "iris_classifier")
-        
-        # Set alias
+        # Set model alias
         client = mlflow.tracking.MlflowClient()
-        client.set_registered_model_alias(name="iris_classifier", 
-                                        alias="Challenger",
-                                        version=model_details.version)
+        model_version = client.get_latest_versions("iris_model", stages=["None"])[0].version
+        client.set_registered_model_alias("iris_model", "Challenger", model_version)
         
-        return accuracy
+    return accuracy, run.info.run_id
 
 if __name__ == "__main__":
-    accuracy = train_model()
-    print(f"Model trained with accuracy: {accuracy}")
+    accuracy, run_id = train_model()
+    print(f"Model trained with accuracy: {accuracy:.4f}")
+    print(f"Run ID: {run_id}")

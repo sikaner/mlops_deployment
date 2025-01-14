@@ -3,3 +3,5 @@ pandas
 mlflow
 pytest
 numpy
+python-dotenv
+requests
