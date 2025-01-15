@@ -5,7 +5,7 @@ pipeline {
     
     environment {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
-        VIRTUAL_ENV = "${WORKSPACE}/mldenv"
+        VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
     }
 
@@ -27,10 +27,10 @@ pipeline {
                     $PYTHON_BIN --version
 
                     # Create a virtual environment
-                    $PYTHON_BIN -m venv mldenv
+                    $PYTHON_BIN -m venv .mldenv
 
                     # Activate the virtual environment
-                    source mldenv/bin/activate
+                    source .mldenv/bin/activate
 
                     # Install dependencies if requirements.txt exists
                     if [ -f requirements.txt ]; then
@@ -85,7 +85,7 @@ pipeline {
                             sh '''
                                 #!/bin/bash
                                 set -e
-                                source mldenv/bin/activate
+                                source .mldenv/bin/activate
                                 python -c "
                                 import mlflow
                                 client = mlflow.tracking.MlflowClient()
@@ -116,7 +116,7 @@ pipeline {
                             sh '''
                                 #!/bin/bash
                                 set -e
-                                source mldenv/bin/activate
+                                source .mldenv/bin/activate
                                 python -c "
                                 import mlflow
                                 client = mlflow.tracking.MlflowClient()
