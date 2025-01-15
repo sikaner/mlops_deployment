@@ -11,11 +11,8 @@ pipeline {
 
     stages {
         stage('Setup') {
-            steps {  
+            steps {
                 sh '''
-                    sudo chown -R jenkins:jenkins ${VIRTUAL_ENV}
-                    sudo chmod -R 755 ${VIRTUAL_ENV}
-            
                     #!/bin/bash
                     set -e  # Exit immediately if a command exits with a non-zero status
 
