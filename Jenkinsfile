@@ -12,11 +12,11 @@ pipeline {
     stages {
         stage('Setup') {
             steps {
-                sh '''
-                    #!/bin/bash
-                    set -e  # Exit immediately if a command exits with a non-zero status
+                sh '''#!/bin/bash
+                    # Exit on any error
+                    set -e
 
-                    # Use an explicit Python path
+                    # Use explicit Python path
                     PYTHON_BIN=$(which python3)
                     if [ -z "$PYTHON_BIN" ]; then
                         echo "Python not found. Ensure Python is installed and accessible."
@@ -26,13 +26,20 @@ pipeline {
                     # Verify Python is executable
                     $PYTHON_BIN --version
 
-                    # Create a virtual environment
+                    # Remove existing virtual environment if it exists
+                    rm -rf .mldenv || true
+
+                    # Create virtual environment
                     $PYTHON_BIN -m venv .mldenv
 
-                    # Activate the virtual environment
-                    source .mldenv/bin/activate
+                    # Use . instead of source for shell compatibility
+                    . .mldenv/bin/activate || {
+                        echo "Failed to activate virtual environment"
+                        exit 1
+                    }
 
-                    # Install dependencies if requirements.txt exists
+                    # Upgrade pip and install requirements
+                    pip install --upgrade pip
                     if [ -f requirements.txt ]; then
                         pip install -r requirements.txt
                     fi
@@ -47,17 +54,26 @@ pipeline {
             stages {
                 stage('Train') {
                     steps {
-                        trainModel()
+                        sh '''#!/bin/bash
+                            . .mldenv/bin/activate
+                            python src/train.py
+                        '''
                     }
                 }
                 stage('Test') {
                     steps {
-                        testModel('Challenger')
+                        sh '''#!/bin/bash
+                            . .mldenv/bin/activate
+                            python src/test.py Challenger
+                        '''
                     }
                 }
                 stage('Deploy to Dev') {
                     steps {
-                        deployModel('Challenger', 'Development')
+                        sh '''#!/bin/bash
+                            . .mldenv/bin/activate
+                            python src/deploy.py Challenger Development
+                        '''
                     }
                 }
                 stage('Notify') {
@@ -75,25 +91,25 @@ pipeline {
             stages {
                 stage('Load and Test') {
                     steps {
-                        testModel('Challenger')
+                        sh '''#!/bin/bash
+                            . .mldenv/bin/activate
+                            python src/test.py Challenger
+                        '''
                     }
                 }
                 stage('Update Alias') {
                     steps {
-                        deployModel('Challenger', 'Staging')
-                        script {
-                            sh '''
-                                #!/bin/bash
-                                set -e
-                                source .mldenv/bin/activate
-                                python -c "
-                                import mlflow
-                                client = mlflow.tracking.MlflowClient()
-                                model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
-                                client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
-                                "
-                            '''
-                        }
+                        sh '''#!/bin/bash
+                            . .mldenv/bin/activate
+                            python src/deploy.py Challenger Staging
+                            
+                            python -c "
+import mlflow
+client = mlflow.tracking.MlflowClient()
+model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
+client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
+"
+                        '''
                     }
                 }
                 stage('Notify') {
@@ -111,20 +127,17 @@ pipeline {
             stages {
                 stage('Deploy to Production') {
                     steps {
-                        script {
-                            deployModel('Challenger-post-test', 'Production')
-                            sh '''
-                                #!/bin/bash
-                                set -e
-                                source .mldenv/bin/activate
-                                python -c "
-                                import mlflow
-                                client = mlflow.tracking.MlflowClient()
-                                model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
-                                client.set_registered_model_alias('iris_model', 'Champion', model_version)
-                                "
-                            '''
-                        }
+                        sh '''#!/bin/bash
+                            . .mldenv/bin/activate
+                            python src/deploy.py Challenger-post-test Production
+                            
+                            python -c "
+import mlflow
+client = mlflow.tracking.MlflowClient()
+model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
+client.set_registered_model_alias('iris_model', 'Champion', model_version)
+"
+                        '''
                     }
                 }
                 stage('Notify') {
@@ -137,6 +150,10 @@ pipeline {
     }
     
     post {
+        always {
+            // Cleanup
+            sh 'rm -rf .mldenv || true'
+        }
         failure {
             notifyEmail('Pipeline Failed')
         }
