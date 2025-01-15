@@ -5,7 +5,7 @@ pipeline {
     
     environment {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
-        VIRTUAL_ENV = "/var/lib/jenkins/workspace/mlflow_dep_dev/mldenv"
+        VIRTUAL_ENV = "${WORKSPACE}/mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
     }
 
