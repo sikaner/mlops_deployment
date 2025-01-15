@@ -12,11 +12,24 @@ pipeline {
     stages {
         stage('Setup') {
             steps {
-                sh """
-                    python -m venv mldenv || true
+                sh '''
+                    #!/bin/bash
+                    set -e  # Exit immediately if a command exits with a non-zero status
+                    
+                    # Ensure Python is executable
+                    python --version || exit 1
+                    
+                    # Create a virtual environment
+                    python -m venv mldenv
+                    
+                    # Activate the virtual environment
                     source mldenv/bin/activate
-                    pip install -r requirements.txt
-                """
+                    
+                    # Install dependencies if requirements.txt exists
+                    if [ -f requirements.txt ]; then
+                        pip install -r requirements.txt
+                    fi
+                '''
             }
         }
         
@@ -58,8 +71,9 @@ pipeline {
                     steps {
                         deployModel('Challenger', 'Staging')
                         script {
-                            // Update alias to Challenger-post-test
-                            sh """
+                            sh '''
+                                #!/bin/bash
+                                set -e
                                 source mldenv/bin/activate
                                 python -c "
                                 import mlflow
@@ -67,7 +81,7 @@ pipeline {
                                 model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
                                 client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
                                 "
-                            """
+                            '''
                         }
                     }
                 }
@@ -86,7 +100,9 @@ pipeline {
                     steps {
                         script {
                             deployModel('Challenger-post-test', 'Production')
-                            sh """
+                            sh '''
+                                #!/bin/bash
+                                set -e
                                 source mldenv/bin/activate
                                 python -c "
                                 import mlflow
@@ -94,7 +110,7 @@ pipeline {
                                 model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
                                 client.set_registered_model_alias('iris_model', 'Champion', model_version)
                                 "
-                            """
+                            '''
                         }
                     }
                 }
