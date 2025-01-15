@@ -5,14 +5,17 @@ pipeline {
     
     environment {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
-        VIRTUAL_ENV = "${WORKSPACE}/mldenv"
+        VIRTUAL_ENV = "/var/lib/jenkins/workspace/mlflow_dep_dev/mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
     }
 
     stages {
         stage('Setup') {
-            steps {
+            steps {  
                 sh '''
+                    sudo chown -R jenkins:jenkins ${VIRTUAL_ENV}
+                    sudo chmod -R 755 ${VIRTUAL_ENV}
+            
                     #!/bin/bash
                     set -e  # Exit immediately if a command exits with a non-zero status
 
