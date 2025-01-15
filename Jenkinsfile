@@ -7,37 +7,30 @@ pipeline {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
         VIRTUAL_ENV = "${WORKSPACE}/mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
-        PYTHON_CMD = "python3"  // Use python3 explicitly
+        PYTHON_CMD = "python3"
     }
     
     stages {
         stage('Setup') {
             steps {
-                // Fix permissions first
-                sh '''#!/bin/bash
-                    sudo chown -R jenkins:jenkins ${WORKSPACE}
-                    sudo chmod -R 755 ${WORKSPACE}
-                '''
-                
-                // Setup virtual environment
-                sh '''#!/bin/bash
+                // Clean and setup virtual environment without sudo
+                sh '''#!/bin/bash -l
                     # Remove existing venv if present
                     rm -rf mldenv
                     
                     # Create new venv
-                    ${PYTHON_CMD} -m venv mldenv || true
+                    ${PYTHON_CMD} -m venv mldenv
                     
-                    # Use . instead of source for better compatibility
+                    # Activate virtual environment
                     . mldenv/bin/activate
                     
                     # Install requirements
-                    python -m pip install --upgrade pip
-                    pip install -r requirements.txt
+                    python -m pip install --upgrade pip --user
+                    pip install -r requirements.txt --user
                 '''
             }
         }
         
-        // Rest of your pipeline stages remain the same
         stage('Development Pipeline') {
             when { branch 'dev' }
             stages {
@@ -76,7 +69,7 @@ pipeline {
                     steps {
                         deployModel('Challenger', 'Staging')
                         script {
-                            sh '''#!/bin/bash
+                            sh '''#!/bin/bash -l
                                 . mldenv/bin/activate
                                 python -c "
                                 import mlflow
@@ -103,7 +96,7 @@ pipeline {
                     steps {
                         script {
                             deployModel('Challenger-post-test', 'Production')
-                            sh '''#!/bin/bash
+                            sh '''#!/bin/bash -l
                                 . mldenv/bin/activate
                                 python -c "
                                 import mlflow
