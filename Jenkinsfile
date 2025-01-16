@@ -105,7 +105,7 @@ pipeline {
                             sh '''#!/bin/bash
                                 set -x
                                 . .mldenv/bin/activate
-                                python source/deploy.py Challenger Development
+                                python source/deploy.py Challenger Staging
                             '''
                         }
                     }
