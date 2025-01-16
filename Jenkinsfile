@@ -56,7 +56,7 @@ pipeline {
                     steps {
                         sh '''#!/bin/bash
                             . .mldenv/bin/activate
-                            python src/train.py
+                            python source/train.py
                         '''
                     }
                 }
@@ -64,7 +64,7 @@ pipeline {
                     steps {
                         sh '''#!/bin/bash
                             . .mldenv/bin/activate
-                            python src/test.py Challenger
+                            python source/test.py Challenger
                         '''
                     }
                 }
@@ -72,7 +72,7 @@ pipeline {
                     steps {
                         sh '''#!/bin/bash
                             . .mldenv/bin/activate
-                            python src/deploy.py Challenger Development
+                            python source/deploy.py Challenger Development
                         '''
                     }
                 }
@@ -93,7 +93,7 @@ pipeline {
                     steps {
                         sh '''#!/bin/bash
                             . .mldenv/bin/activate
-                            python src/test.py Challenger
+                            python source/test.py Challenger
                         '''
                     }
                 }
@@ -101,7 +101,7 @@ pipeline {
                     steps {
                         sh '''#!/bin/bash
                             . .mldenv/bin/activate
-                            python src/deploy.py Challenger Staging
+                            python source/deploy.py Challenger Staging
                             
                             python -c "
 import mlflow
@@ -129,7 +129,7 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
                     steps {
                         sh '''#!/bin/bash
                             . .mldenv/bin/activate
-                            python src/deploy.py Challenger-post-test Production
+                            python source/deploy.py Challenger-post-test Production
                             
                             python -c "
 import mlflow
