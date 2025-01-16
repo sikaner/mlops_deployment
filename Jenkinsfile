@@ -20,6 +20,10 @@ pipeline {
                     credentialsId: 'aws-credentials-id',
                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                    
+                    sh '''
+                        aws s3 ls s3://mlflow1-remote
+                    '''
                 ]]) {
                     sh '''#!/bin/bash
                         # Exit on any error
