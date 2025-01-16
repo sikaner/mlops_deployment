@@ -7,63 +7,59 @@ pipeline {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
         VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
-        // Add AWS credentials environment variables
-        AWS_DEFAULT_REGION = 'us-east-1'  // Replace with your AWS region
+        AWS_DEFAULT_REGION = 'us-east-1'  // Ensure AWS region is set
     }
 
     stages {
         stage('Setup') {
             steps {
-                // Wrap the entire setup in withCredentials block
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-credentials-id',
                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
-                    sh '''#!/bin/bash
-                        # Exit on any error
-                        set -e
+                    script {
+                        try {
+                            sh '''#!/bin/bash
+                                set -e  # Exit on failure
 
-                        # Use explicit Python path
-                        PYTHON_BIN=$(which python3)
-                        if [ -z "$PYTHON_BIN" ]; then
-                            echo "Python not found. Ensure Python is installed and accessible."
-                            exit 1
-                        fi
+                                echo "Checking Python installation..."
+                                PYTHON_BIN=$(which python3 || true)
+                                if [ -z "$PYTHON_BIN" ]; then
+                                    echo "Python not found. Ensure Python is installed."
+                                    exit 1
+                                fi
+                                $PYTHON_BIN --version
 
-                        # Verify Python is executable
-                        $PYTHON_BIN --version
+                                echo "Setting up virtual environment..."
+                                rm -rf .mldenv || true
+                                $PYTHON_BIN -m venv .mldenv
+                                . .mldenv/bin/activate
 
-                        # Remove existing virtual environment if it exists
-                        rm -rf .mldenv || true
+                                echo "Upgrading pip and installing dependencies..."
+                                pip install --upgrade pip
+                                [ -f requirements.txt ] && pip install -r requirements.txt || echo "No requirements.txt found."
 
-                        # Create virtual environment
-                        $PYTHON_BIN -m venv .mldenv
+                                echo "Verifying AWS S3 access..."
+                                aws s3 ls s3://mlflow1-remote || {
+                                    echo "S3 access failed. Check AWS credentials."
+                                    exit 1
+                                }
 
-                        # Use . instead of source for shell compatibility
-                        . .mldenv/bin/activate || {
-                            echo "Failed to activate virtual environment"
-                            exit 1
+                                echo "Running training script..."
+                                python source/train.py
+                            '''
+                        } catch (Exception e) {
+                            error "Setup stage failed: ${e.getMessage()}"
                         }
-
-                        # Upgrade pip and install requirements
-                        pip install --upgrade pip
-                        if [ -f requirements.txt ]; then
-                            pip install -r requirements.txt
-                        fi
-
-                        # Test S3 access (aws s3 ls should work with valid credentials)
-                        aws s3 ls s3://mlflow1-remote
-                    '''
+                    }
                 }
             }
         }
 
         stage('Development Pipeline') {
-            when {
-                branch 'dev'
-            }
+            when { branch 'dev' }
             stages {
                 stage('Train') {
                     steps {
@@ -119,9 +115,7 @@ pipeline {
         }
 
         stage('Pre-prod Pipeline') {
-            when {
-                branch 'main'
-            }
+            when { branch 'main' }
             stages {
                 stage('Load and Test') {
                     steps {
@@ -149,7 +143,7 @@ pipeline {
                             sh '''#!/bin/bash
                                 . .mldenv/bin/activate
                                 python source/deploy.py Challenger Staging
-                                
+
                                 python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
@@ -169,9 +163,7 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
         }
 
         stage('Production Pipeline') {
-            when {
-                tag "release-*" 
-            }
+            when { tag "release-*" }
             stages {
                 stage('Deploy to Production') {
                     steps {
@@ -184,7 +176,7 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
                             sh '''#!/bin/bash
                                 . .mldenv/bin/activate
                                 python source/deploy.py Challenger-post-test Production
-                                
+
                                 python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
@@ -206,7 +198,6 @@ client.set_registered_model_alias('iris_model', 'Champion', model_version)
     
     post {
         always {
-            // Cleanup
             sh 'rm -rf .mldenv || true'
         }
         failure {
