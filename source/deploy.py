@@ -1,6 +1,8 @@
 import mlflow
 import os
 import sys
+import boto3
+from botocore.exceptions import NoCredentialsError
 
 def deploy_model(model_alias, stage):
     mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI', 'http://localhost:5000'))

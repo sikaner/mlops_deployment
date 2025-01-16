@@ -2,6 +2,8 @@ import mlflow
 import numpy as np
 from sklearn.datasets import load_iris
 from sklearn.metrics import accuracy_score
+import boto3
+from botocore.exceptions import NoCredentialsError
 import os
 
 def test_model(model_alias):
