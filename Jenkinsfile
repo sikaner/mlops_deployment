@@ -7,8 +7,7 @@ pipeline {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
         VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
-        AWS_DEFAULT_REGION = 'us-east-1'
-        MODEL_NAME = 'iris_model'
+        AWS_DEFAULT_REGION = 'us-east-1'  
     }
 
     stages {
@@ -24,7 +23,7 @@ pipeline {
                         try {
                             sh '''#!/bin/bash
                                 set -e
-                                set -x  
+                                set -x  # Print each command before execution
                                 
                                 echo "Checking Python installation..."
                                 PYTHON_BIN=$(which python3 || true)
@@ -60,74 +59,77 @@ pipeline {
             }
         }
 
-        stage('Production Pipeline') {
-            when { tag "release-*" }
-            stages {
-                stage('Deploy to Production') {
-                    steps {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''#!/bin/bash
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/deploy.py Challenger-post-test Production
-                                
-                                python -c "
+        stage('Train') {
+            steps {
+                sh '''#!/bin/bash
+                    set -x
+                    . .mldenv/bin/activate
+                    python source/train.py
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''#!/bin/bash
+                    set -x
+                    . .mldenv/bin/activate
+                    python source/test.py Challenger
+                '''
+            }
+        }
+
+        stage('Deploy to Staging') {
+            steps {
+                sh '''#!/bin/bash
+                    set -x
+                    . .mldenv/bin/activate
+                    python source/deploy.py Challenger Staging
+                '''
+            }
+        }
+
+        stage('Update Alias') {
+            steps {
+                sh '''#!/bin/bash
+                    set -x
+                    . .mldenv/bin/activate
+                    python source/deploy.py Challenger Staging
+                    
+                    python -c "
+import mlflow
+client = mlflow.tracking.MlflowClient()
+model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
+client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
+"
+                '''
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                sh '''#!/bin/bash
+                    set -x
+                    . .mldenv/bin/activate
+                    python source/deploy.py Challenger-post-test Production
+                    
+                    python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
 client.set_registered_model_alias('iris_model', 'Champion', model_version)
 "
-                            '''
-                        }
-                    }
-                }
-                
-                stage('Deploy to MLflow Webserver') {
-                    steps {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''#!/bin/bash
-                                set -x
-                                . .mldenv/bin/activate
+                '''
+            }
+        }
 
-                                echo "Fetching latest production model..."
-                                MODEL_VERSION=$(python -c "
-import mlflow
-client = mlflow.tracking.MlflowClient()
-model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
-print(model_version)
-")
-                                
-                                echo "Downloading the model from MLflow..."
-                                mlflow artifacts download --artifact-uri "models:/iris_model/$MODEL_VERSION" --dst-path "./model"
-
-                                echo "Starting MLflow Model Serving..."
-                                nohup mlflow models serve -m "models:/iris_model/$MODEL_VERSION" --port 5001 --host 0.0.0.0 --no-conda > mlflow.log 2>&1 &
-                                
-                                echo "MLflow model is being served on http://localhost:5001"
-                            '''
-                        }
-                    }
-                }
-                
-                stage('Notify') {
-                    steps {
-                        notifyEmail('Production Pipeline Complete with MLflow Deployment')
-                    }
-                }
+        stage('Notify') {
+            steps {
+                notifyEmail('Pipeline Execution Complete')
             }
         }
     }
-
+    
     post {
         always {
             sh 'rm -rf .mldenv || true'
