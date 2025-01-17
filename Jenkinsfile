@@ -37,7 +37,7 @@ pipeline {
                         
                         # Create and activate virtual environment
                         python3 -m pip install --user virtualenv
-                        python3 -m virtualenv ${VIRTUAL_ENV}
+                        python3 -m venv ${VIRTUAL_ENV}
                         source ${VIRTUAL_ENV}/bin/activate
                         
                         # Install required packages
