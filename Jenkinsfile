@@ -2,7 +2,7 @@
 
 pipeline {
     agent any
-    
+
     environment {
         MLFLOW_TRACKING_URI = 'http://127.0.0.1:5000'  // Corrected MLFLOW_TRACKING_URI for local environment
         VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
@@ -45,7 +45,7 @@ pipeline {
                                 [ -f requirements.txt ] && pip install -r requirements.txt || echo "No requirements.txt found."
 
                                 # Install additional dependencies for serving model
-                                pip install mlflow boto3
+                                pip install gunicorn mlflow boto3
                             '''
                         } catch (Exception e) {
                             error "Setup stage failed: ${e.getMessage()}"
@@ -72,21 +72,24 @@ pipeline {
                         pkill -f "mlflow models serve" || true
                         sleep 5
 
-                        # Start MLflow model server
-                        nohup mlflow models serve -m "runs:/${RUN_ID}/model" \
-                            --host 0.0.0.0 \
-                            --port 5001 \
-                            --no-conda \
-                            > mlflow_serve.log 2>&1 &
+                        # Start MLflow model server with Gunicorn
+                        nohup gunicorn --timeout=120 -b 0.0.0.0:5001 -w 1 mlflow.pyfunc.scoring_server.wsgi:app > mlflow_serve.log 2>&1 &
 
                         # Wait for the server to start
                         echo "Waiting for MLflow server to start..."
-                        sleep 20  # Adjust the sleep time if necessary
+                        attempts=5
+                        while [ $attempts -gt 0 ]; do
+                            if curl -s -f http://127.0.0.1:5001/health; then
+                                echo "MLflow model server is running successfully"
+                                break
+                            else
+                                echo "Waiting for server to start..."
+                                attempts=$((attempts - 1))
+                                sleep 5
+                            fi
+                        done
 
-                        # Test the deployment by checking server health
-                        if curl -s -f http://127.0.0.1:5001/health; then
-                            echo "MLflow model server is running successfully"
-                        else
+                        if [ $attempts -eq 0 ]; then
                             echo "MLflow model server failed to start. Checking logs:"
                             cat mlflow_serve.log
                             exit 1
