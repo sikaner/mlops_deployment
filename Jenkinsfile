@@ -4,7 +4,7 @@ pipeline {
     agent any
     
     environment {
-        export MLFLOW_TRACKING_URI = 'http://127.0.0.1:5000'
+        MLFLOW_TRACKING_URI = 'http://localhost:5000'
         VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
         AWS_DEFAULT_REGION = 'us-east-1'  
