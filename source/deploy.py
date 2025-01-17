@@ -4,7 +4,7 @@ import sys
 import boto3
 from botocore.exceptions import NoCredentialsError
 
-def deploy_model(model_alias, stage):
+def deploy_model(model_alias, Staging):
     mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI', 'http://localhost:5000'))
     client = mlflow.tracking.MlflowClient()
     
@@ -15,10 +15,10 @@ def deploy_model(model_alias, stage):
     client.transition_model_version_stage(
         name="iris_model",
         version=model_version.version,
-        stage=stage
+        stage=Staging
     )
     
-    print(f"Model version {model_version.version} transitioned to {stage}")
+    print(f"Model version {model_version.version} transitioned to {Staging}")
     return True
 
 if __name__ == "__main__":
