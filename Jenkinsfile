@@ -6,7 +6,7 @@ pipeline {
     environment {
         MLFLOW_TRACKING_URI = 'http://127.0.0.1:5000'
         VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
-        PATH = "${HOME}/.pyenv/bin:${VIRTUAL_ENV}/bin:${PATH}"
+        PATH = "${HOME}/.pyenv/bin:${HOME}/.pyenv/shims:${VIRTUAL_ENV}/bin:${PATH}"
         AWS_DEFAULT_REGION = 'us-east-1'
         RUN_ID = '7cb7836bab814dc397fca997f2d4a2cb'  // Your MLflow run ID
     }
@@ -23,20 +23,25 @@ pipeline {
                     sh '''#!/bin/bash
                         set -e
                         
-                        # Install pyenv if not already installed
-                        if [ ! -d "$HOME/.pyenv" ]; then
+                        # Ensure pyenv is installed and initialized
+                        if ! command -v pyenv &> /dev/null; then
+                            echo "pyenv not found. Installing..."
                             curl https://pyenv.run | bash
                         fi
                         
                         # Initialize pyenv
+                        export PATH="$HOME/.pyenv/bin:$PATH"
+                        eval "$(pyenv init --path)"
                         eval "$(pyenv init -)"
+                        eval "$(pyenv virtualenv-init -)"
                         
                         # Create and activate virtual environment
-                        python3 -m pip install virtualenv
+                        python3 -m pip install --user virtualenv
                         python3 -m virtualenv ${VIRTUAL_ENV}
                         source ${VIRTUAL_ENV}/bin/activate
                         
                         # Install required packages
+                        pip install --upgrade pip
                         pip install mlflow boto3 scikit-learn pandas
                         
                         # Verify MLflow installation
