@@ -102,7 +102,7 @@ pipeline {
 
                     # Test prediction endpoint with sample data
                     curl -X POST -H "Content-Type:application/json" \
-                        --data '{"dataframe_split": {"columns":["feature1", "feature2", "feature3", "feature4"], "data":[[5.1, 3.5, 1.4, 0.2]]}}' \
+                        --data '{"dataframe_split": {"columns":["petal length (cm)", "petal width (cm)", "sepal length (cm)", "sepal width (cm)"], "data":[[5.1, 3.5, 1.4, 0.2]]}}' \
                         http://localhost:5001/invocations
                 '''
             }
