@@ -4,7 +4,7 @@ pipeline {
     agent any
     
     environment {
-        MLFLOW_TRACKING_URI = 'http://localhost:5000'
+        MLFLOW_TRACKING_URI = 'http://127.0.0.1:5000'  // Corrected MLFLOW_TRACKING_URI for local environment
         VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
         AWS_DEFAULT_REGION = 'us-east-1'  
@@ -26,6 +26,9 @@ pipeline {
                                 set -e
                                 set -x  # Print each command before execution
                                 
+                                # Ensure MLFLOW_TRACKING_URI is set
+                                export MLFLOW_TRACKING_URI=http://127.0.0.1:5000
+
                                 # Check if Python is installed
                                 PYTHON_BIN=$(which python3 || true)
                                 if [ -z "$PYTHON_BIN" ]; then
@@ -78,10 +81,10 @@ pipeline {
 
                         # Wait for the server to start
                         echo "Waiting for MLflow server to start..."
-                        sleep 20
+                        sleep 20  # Adjust the sleep time if necessary
 
-                        # Test the deployment
-                        if curl -s -f http://localhost:5001/health; then
+                        # Test the deployment by checking server health
+                        if curl -s -f http://127.0.0.1:5001/health; then
                             echo "MLflow model server is running successfully"
                         else
                             echo "MLflow model server failed to start. Checking logs:"
@@ -103,7 +106,7 @@ pipeline {
                     # Test prediction endpoint with sample data
                     curl -X POST -H "Content-Type:application/json" \
                         --data '{"dataframe_split": {"columns":["petal length (cm)", "petal width (cm)", "sepal length (cm)", "sepal width (cm)"], "data":[[5.1, 3.5, 1.4, 0.2]]}}' \
-                        http://localhost:5001/invocations
+                        http://127.0.0.1:5001/invocations
                 '''
             }
         }
