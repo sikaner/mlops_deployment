@@ -1,4 +1,4 @@
-@Library('jenkins-shared-library') _
+@Library('jenkins-shared-library') _ 
 
 pipeline {
     agent any
@@ -72,12 +72,8 @@ pipeline {
                         pkill -f "mlflow models serve" || true
                         sleep 5
 
-                        # Start MLflow model server
-                        nohup mlflow models serve -m "runs:/${RUN_ID}/model" \
-                            --host 0.0.0.0 \
-                            --port 5002 \
-                            --no-conda \
-                            > mlflow_serve.log 2>&1 &
+                        # Start MLflow model server using tmux
+                        tmux new-session -d -s mlflow_server "mlflow models serve -m 'runs:/${RUN_ID}/model' --host 0.0.0.0 --port 5002 --no-conda"
 
                         # Wait for the server to start
                         echo "Waiting for MLflow server to start..."
@@ -88,7 +84,7 @@ pipeline {
                             echo "MLflow model server is running successfully"
                         else
                             echo "MLflow model server failed to start. Checking logs:"
-                            cat mlflow_serve.log
+                            tmux attach-session -t mlflow_server
                             exit 1
                         fi
                     '''
