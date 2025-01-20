@@ -105,7 +105,7 @@ pipeline {
 
                     # Test prediction endpoint with sample data
                     curl -X POST -H "Content-Type:application/json" \
-                        --data '{"dataframe_split": {"columns":["petal length (cm)", "petal width (cm)", "sepal length (cm)", "sepal width (cm)"], "data":[[5.1, 3.5, 1.4, 0.2]]}}' \
+                        --data '{"dataframe_split": {"columns":["sepal length (cm)", "sepal width (cm)", "petal length (cm)", "petal width (cm)"], "data":[[5.1, 3.5, 1.4, 0.2]]}}' \
                         http://127.0.0.1:5002/invocations
                 '''
             }
