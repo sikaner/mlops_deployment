@@ -75,7 +75,7 @@ pipeline {
                         # Start MLflow model server
                         nohup mlflow models serve -m "runs:/${RUN_ID}/model" \
                             --host 0.0.0.0 \
-                            --port 5000 \
+                            --port 5001 \
                             --no-conda \
                             > mlflow_serve.log 2>&1 &
 
@@ -84,7 +84,7 @@ pipeline {
                         sleep 20  # Adjust the sleep time if necessary
 
                         # Test the deployment by checking server health
-                        if curl -s -f http://127.0.0.1:5000/health; then
+                        if curl -s -f http://127.0.0.1:5001/health; then
                             echo "MLflow model server is running successfully"
                         else
                             echo "MLflow model server failed to start. Checking logs:"
@@ -106,7 +106,7 @@ pipeline {
                     # Test prediction endpoint with sample data
                     curl -X POST -H "Content-Type:application/json" \
                         --data '{"dataframe_split": {"columns":["petal length (cm)", "petal width (cm)", "sepal length (cm)", "sepal width (cm)"], "data":[[5.1, 3.5, 1.4, 0.2]]}}' \
-                        http://127.0.0.1:5000/invocations
+                        http://127.0.0.1:5001/invocations
                 '''
             }
         }
