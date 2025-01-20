@@ -8,7 +8,7 @@ pipeline {
         VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
         AWS_DEFAULT_REGION = 'us-east-1'  
-        RUN_ID = '4439089c1bd742e3b6a63f6c018ded36'  // Your MLflow run ID
+        RUN_ID = 'cb1e5b0e4eb945fd8c4cf5466c35eb09'  // Your MLflow run ID
     }
 
     stages {
