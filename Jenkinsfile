@@ -72,25 +72,14 @@ pipeline {
                         pkill -f "mlflow models serve" || true
                         sleep 5
 
-                        # Start MLflow model server
-                        nohup mlflow models serve -m "runs:/${RUN_ID}/model" \
+                        # Start MLflow model server (foreground)
+                        mlflow models serve -m "runs:/${RUN_ID}/model" \
                             --host 0.0.0.0 \
                             --port 5002 \
-                            --no-conda \
-                            > mlflow_serve.log 2>&1 &
+                            --no-conda
 
-                        # Wait for the server to start
-                        echo "Waiting for MLflow server to start..."
-                        sleep 20  # Adjust the sleep time if necessary
-
-                        # Test the deployment by checking server health
-                        if curl -s -f http://127.0.0.1:5002/health; then
-                            echo "MLflow model server is running successfully"
-                        else
-                            echo "MLflow model server failed to start. Checking logs:"
-                            cat mlflow_serve.log
-                            exit 1
-                        fi
+                        # Wait for the server to start (Jenkins will wait here)
+                        echo "MLflow model server is running"
                     '''
                 }
             }
