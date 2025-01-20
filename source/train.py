@@ -1,6 +1,5 @@
 import mlflow
 import pandas as pd
-import json
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -14,6 +13,9 @@ def train_model():
     iris = load_iris()
     X = pd.DataFrame(iris.data, columns=iris.feature_names)
     y = iris.target
+    #check feature name 
+    print("Feature Names:", iris.feature_names)
+
     
     # Split the data
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -51,28 +53,7 @@ def train_model():
         
     return accuracy, run.info.run_id
 
-
-def predict_with_model(model_uri, data):
-    # Load model from the registered model path
-    model = mlflow.sklearn.load_model(model_uri)
-
-    # Ensure the input dataframe has the correct column names in the right order
-    expected_columns = ["petal length (cm)", "petal width (cm)", "sepal length (cm)", "sepal width (cm)"]
-    data = data[expected_columns]
-
-    # Make predictions
-    predictions = model.predict(data)
-    return predictions
-
-
 if __name__ == "__main__":
     accuracy, run_id = train_model()
     print(f"Model trained with accuracy: {accuracy:.4f}")
     print(f"Run ID: {run_id}")
-
-    # Example of using the trained model for inference
-    sample_data = pd.DataFrame([[5.1, 3.5, 1.4, 0.2]], columns=["petal length (cm)", "petal width (cm)", "sepal length (cm)", "sepal width (cm)"])
-    
-    # Predict using the model
-    predictions = predict_with_model(f"runs:/{run_id}/model", sample_data)
-    print("Predictions:", predictions)
