@@ -63,35 +63,37 @@ pipeline {
                     accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY' 
                 ]]) {
-                    sh '''#!/bin/bash
-                        set -e
-                        set -x
-                        . .mldenv/bin/activate
+                    script {
+                        try {
+                            sh '''#!/bin/bash
+                                set -e
+                                set -x
+                                . .mldenv/bin/activate
 
-                        # Kill any existing MLflow processes
-                        pkill -f "mlflow models serve" || true
-                        sleep 5
+                                # Check if tmux session exists, and kill it if necessary
+                                if tmux ls | grep -q 'mlflow_server'; then
+                                    tmux kill-session -t mlflow_server
+                                fi
 
-                        # Start MLflow model server
-                        mlflow models serve -m "runs:/${RUN_ID}/model" \
-                            --host 0.0.0.0 \
-                            --port 5002 \
-                            --no-conda \
-                    
+                                # Start a new tmux session
+                                tmux new-session -d -s mlflow_server "mlflow models serve -m 'runs:/cb1e5b0e4eb945fd8c4cf5466c35eb09/model' --host 0.0.0.0 --port 5002 --no-conda"
+                                
+                                # Give it some time to start the server
+                                sleep 10
 
-                        # Wait for the server to start
-                        echo "Waiting for MLflow server to start..."
-                        sleep 20  # Adjust the sleep time if necessary
-
-                        # Test the deployment by checking server health
-                        if curl -s -f http://127.0.0.1:5002/health; then
-                            echo "MLflow model server is running successfully"
-                        else
-                            echo "MLflow model server failed to start. Checking logs:"
-                            cat mlflow_serve.log
-                            exit 1
-                        fi
-                    '''
+                                # Test the deployment by checking server health
+                                if curl -s -f http://127.0.0.1:5002/health; then
+                                    echo "MLflow model server is running successfully"
+                                else
+                                    echo "MLflow model server failed to start. Checking logs:"
+                                    cat mlflow_serve.log
+                                    exit 1
+                                fi
+                            '''
+                        } catch (Exception e) {
+                            error "Deployment failed: ${e.getMessage()}"
+                        }
+                    }
                 }
             }
         }
