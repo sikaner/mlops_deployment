@@ -23,6 +23,8 @@ def train_model():
     # Initialize and train model
     rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
     rf_model.fit(X_train, y_train)
+    print("Feature names during training:", X_train.columns.tolist())
+    
     
     # Make predictions and calculate metrics
     y_pred = rf_model.predict(X_test)
