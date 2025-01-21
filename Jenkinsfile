@@ -135,7 +135,7 @@ pipeline {
                                 python source/test.py Challenger
                             '''
                         }
-                    } //abc 
+                    } 
                 }
                 stage('Update Alias') {
                     steps {
