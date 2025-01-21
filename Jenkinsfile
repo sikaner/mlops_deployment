@@ -23,12 +23,12 @@ pipeline {
                         try {
                             sh '''#!/bin/bash
                                 set -e
-                                set -x  
+                                set -x  # Print each command before execution
                                 
                                 echo "Checking Python installation..."
                                 PYTHON_BIN=$(which python3 || true)
                                 if [ -z "$PYTHON_BIN" ]; then
-                                    echo "Python not found."
+                                    echo "Python not found. Ensure Python is installed."
                                     exit 1
                                 fi
                                 $PYTHON_BIN --version
@@ -38,13 +38,13 @@ pipeline {
                                 $PYTHON_BIN -m venv .mldenv
                                 . .mldenv/bin/activate
 
-                                echo "Installing dependencies..."
+                                echo "Upgrading pip and installing dependencies..."
                                 pip install --upgrade pip
                                 [ -f requirements.txt ] && pip install -r requirements.txt || echo "No requirements.txt found."
 
                                 echo "Verifying AWS S3 access..."
                                 aws s3 ls s3://mlflow1-remote || {
-                                    echo "S3 access failed."
+                                    echo "S3 access failed. Check AWS credentials."
                                     exit 1
                                 }
 
@@ -59,7 +59,6 @@ pipeline {
             }
         }
 
-        // Dev Pipeline
         stage('Development Pipeline') {
             when { branch 'dev' }
             stages {
@@ -119,7 +118,6 @@ pipeline {
             }
         }
 
-        // Pre-Prod Pipeline
         stage('Pre-prod Pipeline') {
             when { branch 'main' }
             stages {
@@ -170,7 +168,6 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
             }
         }
 
-        // Production Pipeline
         stage('Production Pipeline') {
             when { tag "release-*" }
             stages {
