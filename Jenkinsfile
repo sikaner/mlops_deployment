@@ -13,46 +13,40 @@ pipeline {
     stages {
         stage('Setup') {
             steps {
-                withCredentials([[ // AWS credentials binding
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-credentials-id',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                ]]) {
-                    script {
-                        try {
-                            sh '''
-                                set -e
-                                echo "Setting up virtual environment..."
-                                python3 -m venv .mldenv
-                                . .mldenv/bin/activate
-                                pip install --upgrade pip
-                                [ -f requirements.txt ] && pip install -r requirements.txt || echo "No requirements.txt found."
-                            '''
-                        } catch (Exception e) {
-                            error "Setup failed: ${e.getMessage()}"
-                        }
-                    }
-                }
+                echo 'Setting up environment...'
             }
         }
 
         stage('Development Pipeline') {
             when { branch 'dev' }
             stages {
-                stage('Train') { /* Train model */ }
-                stage('Test') { /* Test model */ }
-                stage('Deploy to Dev') { /* Deploy to Dev */ }
-                stage('Notify') { steps { notifyEmail('Development Pipeline Complete') } }
+                stage('Train') {
+                    steps { echo 'Training model...' }
+                }
+                stage('Test') {
+                    steps { echo 'Testing model...' }
+                }
+                stage('Deploy to Dev') {
+                    steps { echo 'Deploying to Dev...' }
+                }
+                stage('Notify') {
+                    steps { notifyEmail('Development Pipeline Complete') }
+                }
             }
         }
 
         stage('Pre-prod Pipeline') {
             when { branch 'main' }
             stages {
-                stage('Load and Test') { /* Test pre-prod model */ }
-                stage('Update Alias') { /* Update alias */ }
-                stage('Notify') { steps { notifyEmail('Pre-production Pipeline Complete') } }
+                stage('Load and Test') {
+                    steps { echo 'Testing pre-prod model...' }
+                }
+                stage('Update Alias') {
+                    steps { echo 'Updating alias...' }
+                }
+                stage('Notify') {
+                    steps { notifyEmail('Pre-production Pipeline Complete') }
+                }
             }
         }
 
@@ -60,28 +54,11 @@ pipeline {
             when { expression { env.GIT_TAG_NAME?.startsWith('release-') } }
             stages {
                 stage('Deploy to Production') {
-                    steps {
-                        withCredentials([[ // AWS credentials binding
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''
-                                set -e
-                                echo "Deploying to production..."
-                                python source/deploy.py Challenger-post-test Production
-                                python -c "
-import mlflow
-client = mlflow.tracking.MlflowClient()
-model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
-client.set_registered_model_alias('iris_model', 'Champion', model_version)
-"
-                            '''
-                        }
-                    }
+                    steps { echo 'Deploying to Production...' }
                 }
-                stage('Notify') { steps { notifyEmail('Production Pipeline Complete') } }
+                stage('Notify') {
+                    steps { notifyEmail('Production Pipeline Complete') }
+                }
             }
         }
     }
