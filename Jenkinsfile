@@ -2,29 +2,24 @@
 
 pipeline {
     agent any
-    
+
     environment {
         MLFLOW_TRACKING_URI = 'http://localhost:5000'
         VIRTUAL_ENV = "${WORKSPACE}/.mldenv"
         PATH = "${VIRTUAL_ENV}/bin:${PATH}"
-        AWS_DEFAULT_REGION = 'us-east-1'  
+        AWS_DEFAULT_REGION = 'us-east-1'
     }
 
     stages {
         stage('Setup') {
             steps {
-                withCredentials([[ 
-                    $class: 'AmazonWebServicesCredentialsBinding', 
-                    credentialsId: 'aws-credentials-id', 
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY' 
-                ]]) {
+                withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
                     script {
                         try {
                             sh '''#!/bin/bash
                                 set -e
                                 set -x  # Print each command before execution
-                                
+
                                 echo "Checking Python installation..."
                                 PYTHON_BIN=$(which python3 || true)
                                 if [ -z "$PYTHON_BIN" ]; then
@@ -42,11 +37,11 @@ pipeline {
                                 pip install --upgrade pip
                                 [ -f requirements.txt ] && pip install -r requirements.txt || echo "No requirements.txt found."
 
+                                echo "Checking AWS credentials..."
+                                aws sts get-caller-identity || { echo "AWS credentials missing!"; exit 1; }
+
                                 echo "Verifying AWS S3 access..."
-                                aws s3 ls s3://mlflow1-remote || {
-                                    echo "S3 access failed. Check AWS credentials."
-                                    exit 1
-                                }
+                                aws s3 ls s3://mlflow1-remote || { echo "S3 access failed. Check AWS credentials."; exit 1; }
 
                                 echo "Running training script..."
                                 python source/train.py
@@ -64,29 +59,37 @@ pipeline {
             stages {
                 stage('Train') {
                     steps {
-                        sh '''
-                            set -x
-                            . .mldenv/bin/activate
-                            python source/train.py
-                        '''
+                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                            sh '''
+                                set -x
+                                . .mldenv/bin/activate
+                                export AWS_PROFILE=default
+                                export AWS_SHARED_CREDENTIALS_FILE=$HOME/.aws/credentials
+                                python source/train.py
+                            '''
+                        }
                     }
                 }
                 stage('Test') {
                     steps {
-                        sh '''
-                            set -x
-                            . .mldenv/bin/activate
-                            python source/test.py Challenger
-                        '''
+                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                            sh '''
+                                set -x
+                                . .mldenv/bin/activate
+                                python source/test.py Challenger
+                            '''
+                        }
                     }
                 }
                 stage('Deploy to Dev') {
                     steps {
-                        sh '''
-                            set -x
-                            . .mldenv/bin/activate
-                            python source/deploy.py Challenger Staging
-                        '''
+                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                            sh '''
+                                set -x
+                                . .mldenv/bin/activate
+                                python source/deploy.py Challenger Staging
+                            '''
+                        }
                     }
                 }
                 stage('Notify') {
@@ -102,27 +105,31 @@ pipeline {
             stages {
                 stage('Load and Test') {
                     steps {
-                        sh '''
-                            set -x
-                            . .mldenv/bin/activate
-                            python source/test.py Challenger
-                        '''
+                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                            sh '''
+                                set -x
+                                . .mldenv/bin/activate
+                                python source/test.py Challenger
+                            '''
+                        }
                     }
                 }
                 stage('Update Alias') {
                     steps {
-                        sh '''
-                            set -x
-                            . .mldenv/bin/activate
-                            python source/deploy.py Challenger Staging
-                            
-                            python -c "
+                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                            sh '''
+                                set -x
+                                . .mldenv/bin/activate
+                                python source/deploy.py Challenger Staging
+                                
+                                python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
 client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
 "
-                        '''
+                            '''
+                        }
                     }
                 }
                 stage('Notify') {
@@ -138,18 +145,20 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
             stages {
                 stage('Deploy to Production') {
                     steps {
-                        sh '''
-                            set -x
-                            . .mldenv/bin/activate
-                            python source/deploy.py Challenger-post-test Production
-                            
-                            python -c "
+                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                            sh '''
+                                set -x
+                                . .mldenv/bin/activate
+                                python source/deploy.py Challenger-post-test Production
+                                
+                                python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
 client.set_registered_model_alias('iris_model', 'Champion', model_version)
 "
-                        '''
+                            '''
+                        }
                     }
                 }
                 stage('Notify') {
@@ -160,7 +169,7 @@ client.set_registered_model_alias('iris_model', 'Champion', model_version)
             }
         }
     }
-    
+
     post {
         always {
             sh 'rm -rf .mldenv || true'
