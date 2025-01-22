@@ -13,11 +13,11 @@ pipeline {
     stages {
         stage('Setup') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-credentials-id',
-                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                withCredentials([[ 
+                    $class: 'AmazonWebServicesCredentialsBinding', 
+                    credentialsId: 'aws-credentials-id', 
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY' 
                 ]]) {
                     script {
                         try {
@@ -60,54 +60,33 @@ pipeline {
         }
 
         stage('Development Pipeline') {
-            when { branch 'dev' }
+            when { expression { env.BRANCH_NAME == 'dev' } }
             stages {
                 stage('Train') {
                     steps {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''#!/bin/bash
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/train.py
-                            '''
-                        }
+                        sh '''
+                            set -x
+                            . .mldenv/bin/activate
+                            python source/train.py
+                        '''
                     }
                 }
                 stage('Test') {
                     steps {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''#!/bin/bash
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/test.py Challenger
-                            '''
-                        }
+                        sh '''
+                            set -x
+                            . .mldenv/bin/activate
+                            python source/test.py Challenger
+                        '''
                     }
                 }
                 stage('Deploy to Dev') {
                     steps {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''#!/bin/bash
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/deploy.py Challenger Staging
-                            '''
-                        }
+                        sh '''
+                            set -x
+                            . .mldenv/bin/activate
+                            python source/deploy.py Challenger Staging
+                        '''
                     }
                 }
                 stage('Notify') {
@@ -119,45 +98,31 @@ pipeline {
         }
 
         stage('Pre-prod Pipeline') {
-            when { branch 'main' }
+            when { expression { env.BRANCH_NAME == 'main' } }
             stages {
                 stage('Load and Test') {
                     steps {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''#!/bin/bash
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/test.py Challenger
-                            '''
-                        }
+                        sh '''
+                            set -x
+                            . .mldenv/bin/activate
+                            python source/test.py Challenger
+                        '''
                     }
                 }
                 stage('Update Alias') {
                     steps {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''#!/bin/bash
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/deploy.py Challenger Staging
-                                
-                                python -c "
+                        sh '''
+                            set -x
+                            . .mldenv/bin/activate
+                            python source/deploy.py Challenger Staging
+                            
+                            python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
 client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
 "
-                            '''
-                        }
+                        '''
                     }
                 }
                 stage('Notify') {
@@ -169,29 +134,22 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
         }
 
         stage('Production Pipeline') {
-            when { tag "release-*" }
+            when { expression { env.GIT_BRANCH.startsWith('refs/tags/release-') } }
             stages {
                 stage('Deploy to Production') {
                     steps {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'aws-credentials-id',
-                            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-                            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-                        ]]) {
-                            sh '''#!/bin/bash
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/deploy.py Challenger-post-test Production
-                                
-                                python -c "
+                        sh '''
+                            set -x
+                            . .mldenv/bin/activate
+                            python source/deploy.py Challenger-post-test Production
+                            
+                            python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
 client.set_registered_model_alias('iris_model', 'Champion', model_version)
 "
-                            '''
-                        }
+                        '''
                     }
                 }
                 stage('Notify') {
