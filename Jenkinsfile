@@ -13,12 +13,12 @@ pipeline {
     stages {
         stage('Setup') {
             steps {
-                withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                    script {
+                script {
+                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
                         try {
                             sh '''#!/bin/bash
                                 set -e
-                                set -x  # Print each command before execution
+                                set -x
 
                                 echo "Checking Python installation..."
                                 PYTHON_BIN=$(which python3 || true)
@@ -31,7 +31,7 @@ pipeline {
                                 echo "Setting up virtual environment..."
                                 rm -rf .mldenv || true
                                 $PYTHON_BIN -m venv .mldenv
-                                . .mldenv/bin/activate
+                                source .mldenv/bin/activate
 
                                 echo "Upgrading pip and installing dependencies..."
                                 pip install --upgrade pip
@@ -59,42 +59,48 @@ pipeline {
             stages {
                 stage('Train') {
                     steps {
-                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                            sh '''
-                                set -x
-                                . .mldenv/bin/activate
-                                export AWS_PROFILE=default
-                                export AWS_SHARED_CREDENTIALS_FILE=$HOME/.aws/credentials
-                                python source/train.py
-                            '''
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''
+                                    set -x
+                                    source .mldenv/bin/activate
+                                    python source/train.py
+                                '''
+                            }
                         }
                     }
                 }
                 stage('Test') {
                     steps {
-                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                            sh '''
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/test.py Challenger
-                            '''
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''
+                                    set -x
+                                    source .mldenv/bin/activate
+                                    python source/test.py Challenger
+                                '''
+                            }
                         }
                     }
                 }
                 stage('Deploy to Dev') {
                     steps {
-                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                            sh '''
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/deploy.py Challenger Staging
-                            '''
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''
+                                    set -x
+                                    source .mldenv/bin/activate
+                                    python source/deploy.py Challenger Staging
+                                '''
+                            }
                         }
                     }
                 }
                 stage('Notify') {
                     steps {
-                        notifyEmail('Development Pipeline Complete')
+                        script {
+                            notifyEmail('Development Pipeline Complete')
+                        }
                     }
                 }
             }
@@ -105,36 +111,41 @@ pipeline {
             stages {
                 stage('Load and Test') {
                     steps {
-                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                            sh '''
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/test.py Challenger
-                            '''
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''
+                                    set -x
+                                    source .mldenv/bin/activate
+                                    python source/test.py Challenger
+                                '''
+                            }
                         }
                     }
                 }
                 stage('Update Alias') {
                     steps {
-                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                            sh '''
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/deploy.py Challenger Staging
-                                
-                                python -c "
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''
+                                    set -x
+                                    source .mldenv/bin/activate
+                                    python source/deploy.py Challenger Staging
+                                    python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
 client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
 "
-                            '''
+                                '''
+                            }
                         }
                     }
                 }
                 stage('Notify') {
                     steps {
-                        notifyEmail('Pre-production Pipeline Complete')
+                        script {
+                            notifyEmail('Pre-production Pipeline Complete')
+                        }
                     }
                 }
             }
@@ -145,25 +156,28 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
             stages {
                 stage('Deploy to Production') {
                     steps {
-                        withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                            sh '''
-                                set -x
-                                . .mldenv/bin/activate
-                                python source/deploy.py Challenger-post-test Production
-                                
-                                python -c "
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''
+                                    set -x
+                                    source .mldenv/bin/activate
+                                    python source/deploy.py Challenger-post-test Production
+                                    python -c "
 import mlflow
 client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
 client.set_registered_model_alias('iris_model', 'Champion', model_version)
 "
-                            '''
+                                '''
+                            }
                         }
                     }
                 }
                 stage('Notify') {
                     steps {
-                        notifyEmail('Production Pipeline Complete')
+                        script {
+                            notifyEmail('Production Pipeline Complete')
+                        }
                     }
                 }
             }
@@ -172,11 +186,14 @@ client.set_registered_model_alias('iris_model', 'Champion', model_version)
 
     post {
         always {
-            sh 'rm -rf .mldenv || true'
+            script {
+                sh 'rm -rf .mldenv || true'
+            }
         }
         failure {
-            notifyEmail('Pipeline Failed')
+            script {
+                notifyEmail('Pipeline Failed')
+            }
         }
     }
 }
-//abc
