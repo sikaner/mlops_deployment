@@ -61,9 +61,10 @@ pipeline {
                     steps {
                         script {
                             withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                sh '''
+                                sh '''#!/bin/bash
+                                    set -e
                                     set -x
-                                    source .mldenv/bin/activate
+                                    . .mldenv/bin/activate
                                     python source/train.py
                                 '''
                             }
@@ -74,9 +75,10 @@ pipeline {
                     steps {
                         script {
                             withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                sh '''
+                                sh '''#!/bin/bash
+                                    set -e
                                     set -x
-                                    source .mldenv/bin/activate
+                                    . .mldenv/bin/activate
                                     python source/test.py Challenger
                                 '''
                             }
@@ -87,9 +89,10 @@ pipeline {
                     steps {
                         script {
                             withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                sh '''
+                                sh '''#!/bin/bash
+                                    set -e
                                     set -x
-                                    source .mldenv/bin/activate
+                                    . .mldenv/bin/activate
                                     python source/deploy.py Challenger Staging
                                 '''
                             }
@@ -113,9 +116,10 @@ pipeline {
                     steps {
                         script {
                             withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                sh '''
+                                sh '''#!/bin/bash
+                                    set -e
                                     set -x
-                                    source .mldenv/bin/activate
+                                    . .mldenv/bin/activate
                                     python source/test.py Challenger
                                 '''
                             }
@@ -126,9 +130,10 @@ pipeline {
                     steps {
                         script {
                             withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                sh '''
+                                sh '''#!/bin/bash
+                                    set -e
                                     set -x
-                                    source .mldenv/bin/activate
+                                    . .mldenv/bin/activate
                                     python source/deploy.py Challenger Staging
                                     python -c "
 import mlflow
@@ -158,9 +163,10 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
                     steps {
                         script {
                             withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                sh '''
+                                sh '''#!/bin/bash
+                                    set -e
                                     set -x
-                                    source .mldenv/bin/activate
+                                    . .mldenv/bin/activate
                                     python source/deploy.py Challenger-post-test Production
                                     python -c "
 import mlflow
