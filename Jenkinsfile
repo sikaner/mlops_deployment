@@ -55,7 +55,7 @@ pipeline {
         }
 
         stage('Development Pipeline') {
-            when { expression { env.BRANCH_NAME == 'dev' } }
+            when { branch 'dev' }
             stages {
                 stage('Train') {
                     steps {
@@ -110,7 +110,7 @@ pipeline {
         }
 
         stage('Pre-prod Pipeline') {
-            when { expression { env.BRANCH_NAME == 'main' } }
+            when { branch 'main' }
             stages {
                 stage('Load and Test') {
                     steps {
@@ -157,7 +157,7 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
         }
 
         stage('Production Pipeline') {
-            when { expression { env.GIT_BRANCH.startsWith('refs/tags/release-') } }
+            when { expression { env.GIT_TAG_NAME?.startsWith('release-') } }
             stages {
                 stage('Deploy to Production') {
                     steps {
