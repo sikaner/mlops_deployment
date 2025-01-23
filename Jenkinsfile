@@ -55,7 +55,7 @@ pipeline {
         }
 
         stage('Development Pipeline') {
-            when { branch 'dev' }
+            when { branch 'dev' } 
             stages {
                 stage('Train') {
                     steps {
@@ -110,7 +110,7 @@ pipeline {
         }
 
         stage('Pre-prod Pipeline') {
-            when { branch 'main' }
+            when { branch 'main' } 
             stages {
                 stage('Load and Test') {
                     steps {
@@ -141,23 +141,24 @@ client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
 client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
 "
-                                '''
+                                        '''
+                                    }
+                                }
+                            }
+                        }
+
+                        stage('Notify Pre-Prod Complete') {
+                            steps {
+                                script {
+                                    notifyEmail('Pre-Production Pipeline Complete')
+                                }
                             }
                         }
                     }
                 }
-                stage('Notify') {
-                    steps {
-                        script {
-                            notifyEmail('Pre-production Pipeline Complete')
-                        }
-                    }
-                }
-            }
-        }
 
         stage('Production Pipeline') {
-            when { expression { return env.GIT_TAG_NAME && env.GIT_TAG_NAME == 'release-1.0.0' } }
+            when { expression { env.GIT_BRANCH.startsWith('refs/tags/release-1.0.0') } }
             stages {
                 stage('Deploy to Production') {
                     steps {
@@ -174,15 +175,18 @@ client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
 client.set_registered_model_alias('iris_model', 'Champion', model_version)
 "
-                                '''
+                                        '''
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-                stage('Notify') {
-                    steps {
-                        script {
-                            notifyEmail('Production Pipeline Complete')
+
+                        stage('Notify Production Release') {
+                            steps {
+                                script {
+                                    notifyEmail('Production Release Deployed')
+                                }
+                            }
                         }
                     }
                 }
@@ -198,8 +202,9 @@ client.set_registered_model_alias('iris_model', 'Champion', model_version)
         }
         failure {
             script {
-                notifyEmail('Pipeline Failed')
+                notifyEmail('Pipeline Execution Failed')
             }
         }
     }
 }
+//abc 
