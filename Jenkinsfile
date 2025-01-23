@@ -157,8 +157,7 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
         }
 
         stage('Production Pipeline') {
-            when { expression 
-            {return env.GIT_BRANCH && env.GIT_BRANCH == "refs/tags/release-1.0.0" } }
+            when { expression { return env.GIT_TAG_NAME && env.GIT_TAG_NAME == 'release-1.0.0' } }
             stages {
                 stage('Deploy to Production') {
                     steps {
@@ -204,4 +203,3 @@ client.set_registered_model_alias('iris_model', 'Champion', model_version)
         }
     }
 }
-//abc
