@@ -11,169 +11,178 @@ pipeline {
     }
 
     stages {
-        stage('Conditional Pipeline') {
+        stage('Setup') {
+            steps {
+                script {
+                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                        try {
+                            sh '''#!/bin/bash
+                                set -e
+                                set -x
+
+                                echo "Checking Python installation..."
+                                PYTHON_BIN=$(which python3 || true)
+                                if [ -z "$PYTHON_BIN" ]; then
+                                    echo "Python not found. Ensure Python is installed."
+                                    exit 1
+                                fi
+                                $PYTHON_BIN --version
+
+                                echo "Setting up virtual environment..."
+                                rm -rf .mldenv || true
+                                $PYTHON_BIN -m venv .mldenv
+                                source .mldenv/bin/activate
+
+                                echo "Upgrading pip and installing dependencies..."
+                                pip install --upgrade pip
+                                [ -f requirements.txt ] && pip install -r requirements.txt || echo "No requirements.txt found."
+
+                                echo "Checking AWS credentials..."
+                                aws sts get-caller-identity || { echo "AWS credentials missing!"; exit 1; }
+
+                                echo "Verifying AWS S3 access..."
+                                aws s3 ls s3://mlflow1-remote || { echo "S3 access failed. Check AWS credentials."; exit 1; }
+
+                                echo "Running training script..."
+                                python source/train.py
+                            '''
+                        } catch (Exception e) {
+                            error "Setup stage failed: ${e.getMessage()}"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Development Pipeline') {
+            when { branch 'dev' } 
             stages {
-                // Development Branch Pipeline
-                stage('Development Pipeline') {
-                    when { 
-                        branch 'dev' 
-                    }
-                    stages {
-                        stage('Setup Dev Environment') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            python3 -m venv .mldenv
-                                            . .mldenv/bin/activate
-                                            pip install -r requirements.txt
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Train Model') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/train.py
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Run Tests') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/test.py Challenger
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Deploy to Dev') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/deploy.py Challenger Staging
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Notify Dev Complete') {
-                            steps {
-                                script {
-                                    notifyEmail('Development Pipeline Complete')
-                                }
+                stage('Train') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/train.py
+                                '''
                             }
                         }
                     }
                 }
-
-                // Main Branch (Pre-Production) Pipeline
-                stage('Pre-Production Pipeline') {
-                    when { 
-                        branch 'main' 
-                    }
-                    stages {
-                        stage('Validate Staging Model') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/test.py Challenger
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Update Model Alias') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/deploy.py Challenger Staging
-                                            python -c "
-import mlflow
-try:
-    client = mlflow.tracking.MlflowClient()
-    model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
-    client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
-except Exception as e:
-    print(f'Error updating model alias: {e}')
-"
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Notify Pre-Prod Complete') {
-                            steps {
-                                script {
-                                    notifyEmail('Pre-Production Pipeline Complete')
-                                }
+                stage('Test') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/test.py Challenger
+                                '''
                             }
                         }
                     }
                 }
-
-                // Production Release Pipeline
-                stage('Production Release Pipeline') {
-                    when { 
-                        tag 'v1.0.1' 
-                    }
-                    stages {
-                        stage('Deploy to Production') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/deploy.py Challenger-post-test Production
-                                            python -c "
-import mlflow
-try:
-    client = mlflow.tracking.MlflowClient()
-    model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
-    client.set_registered_model_alias('iris_model', 'Champion', model_version)
-except Exception as e:
-    print(f'Error updating model alias: {e}')
-"
-                                        '''
-                                    }
-                                }
+                stage('Deploy to Dev') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/deploy.py Challenger Staging
+                                '''
                             }
                         }
+                    }
+                }
+                stage('Notify') {
+                    steps {
+                        script {
+                            notifyEmail('Development Pipeline Complete')
+                        }
+                    }
+                }
+            }
+        }
 
-                        stage('Notify Production Release') {
-                            steps {
-                                script {
-                                    notifyEmail('Production Release Deployed')
-                                }
+        stage('Pre-prod Pipeline') {
+            when { branch 'main' } 
+            stages {
+                stage('Load and Test') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/test.py Challenger
+                                '''
                             }
+                        }
+                    }
+                }
+                stage('Update Alias') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/deploy.py Challenger Staging
+                                    python -c "
+import mlflow
+client = mlflow.tracking.MlflowClient()
+model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
+client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
+"
+                                '''
+                            }
+                        }
+                    }
+                }
+                stage('Notify Pre-Prod Complete') {
+                    steps {
+                        script {
+                            notifyEmail('Pre-Production Pipeline Complete')
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Production Pipeline') {
+            when { expression { env.GIT_BRANCH.startsWith('refs/tags/release-1.0.0') } }
+            stages {
+                stage('Deploy to Production') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/deploy.py Challenger-post-test Production
+                                    python -c "
+import mlflow
+client = mlflow.tracking.MlflowClient()
+model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
+client.set_registered_model_alias('iris_model', 'Champion', model_version)
+"
+                                '''
+                            }
+                        }
+                    }
+                }
+                stage('Notify Production Release') {
+                    steps {
+                        script {
+                            notifyEmail('Production Release Deployed')
                         }
                     }
                 }
@@ -194,3 +203,4 @@ except Exception as e:
         }
     }
 }
+//abc
