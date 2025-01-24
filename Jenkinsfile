@@ -158,11 +158,8 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
 
         stage('Production Pipeline') {
             when {
-                allOf {
-                    branch 'main'
-                    expression { return env.GIT_TAG_NAME?.startsWith('v') }
+                    expression { env.GIT_BRANCH ==~ /refs\/tags\/v.*/ }
                 }
-            }
             stages {
                 stage('Deploy to Production') {
                     steps {
