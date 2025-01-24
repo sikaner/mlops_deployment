@@ -96,6 +96,80 @@ pipeline {
                 }
             }
         }
+        stage('Conditional Pipeline') {
+            stages {
+                // Development Branch Pipeline
+                stage('Development Pipeline') {
+                    when { 
+                        branch 'dev' 
+                    }
+                    stages {
+                        stage('Setup Dev Environment') {
+                            steps {
+                                script {
+                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                        sh '''#!/bin/bash
+                                            set -e
+                                            python3 -m venv .mldenv
+                                            . .mldenv/bin/activate
+                                            pip install -r requirements.txt
+                                        '''
+                                    }
+                                }
+                            }
+                        }
+
+                        stage('Train Model') {
+                            steps {
+                                script {
+                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                        sh '''#!/bin/bash
+                                            set -e
+                                            . .mldenv/bin/activate
+                                            python source/train.py
+                                        '''
+                                    }
+                                }
+                            }
+                        }
+
+                        stage('Run Tests') {
+                            steps {
+                                script {
+                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                        sh '''#!/bin/bash
+                                            set -e
+                                            . .mldenv/bin/activate
+                                            python source/test.py Challenger
+                                        '''
+                                    }
+                                }
+                            }
+                        }
+
+                        stage('Deploy to Dev') {
+                            steps {
+                                script {
+                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                        sh '''#!/bin/bash
+                                            set -e
+                                            . .mldenv/bin/activate
+                                            python source/deploy.py Challenger Staging
+                                        '''
+                                    }
+                                }
+                            }
+                        }
+
+                        stage('Notify Dev Complete') {
+                            steps {
+                                script {
+                                    notifyEmail('Development Pipeline Complete')
+                                }
+                            }
+                        }
+                    }
+                }
 
         stage('Pre-prod Pipeline') {
             when { branch 'main' } 
@@ -188,5 +262,4 @@ except Exception as e:
         }
     }
 }
-
-//abc233
+//abc 
