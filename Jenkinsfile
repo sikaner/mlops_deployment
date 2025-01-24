@@ -141,21 +141,20 @@ client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
 client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
 "
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Notify Pre-Prod Complete') {
-                            steps {
-                                script {
-                                    notifyEmail('Pre-Production Pipeline Complete')
-                                }
+                                '''
                             }
                         }
                     }
                 }
+                stage('Notify Pre-Prod Complete') {
+                    steps {
+                        script {
+                            notifyEmail('Pre-Production Pipeline Complete')
+                        }
+                    }
+                }
+            }
+        }
 
         stage('Production Pipeline') {
             when { expression { env.GIT_BRANCH.startsWith('refs/tags/release-1.0.0') } }
@@ -175,18 +174,15 @@ client = mlflow.tracking.MlflowClient()
 model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
 client.set_registered_model_alias('iris_model', 'Champion', model_version)
 "
-                                        '''
-                                    }
-                                }
+                                '''
                             }
                         }
-
-                        stage('Notify Production Release') {
-                            steps {
-                                script {
-                                    notifyEmail('Production Release Deployed')
-                                }
-                            }
+                    }
+                }
+                stage('Notify Production Release') {
+                    steps {
+                        script {
+                            notifyEmail('Production Release Deployed')
                         }
                     }
                 }
