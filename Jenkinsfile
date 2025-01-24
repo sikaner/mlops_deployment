@@ -36,53 +36,19 @@ pipeline {
                             }
                         }
 
-                        stage('Train Model') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/train.py
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Run Tests') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/test.py Challenger
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Deploy to Dev') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/deploy.py Challenger Staging
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Notify Dev Complete') {
-                            steps {
-                                script {
-                                    notifyEmail('Development Pipeline Complete')
-                                }
+        stage('Development Pipeline') {
+            when { branch 'dev' } 
+            stages {
+                stage('Train') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/train.py
+                                '''
                             }
                         }
                     }
@@ -105,16 +71,59 @@ pipeline {
                                 }
                             }
                         }
+                    }
+                }
+                stage('Deploy to Dev') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/deploy.py Challenger Staging
+                                '''
+                            }
+                        }
+                    }
+                }
+                stage('Notify') {
+                    steps {
+                        script {
+                            notifyEmail('Development Pipeline Complete')
+                        }
+                    }
+                }
+            }
+        }
 
-                        stage('Update Model Alias') {
-                            steps {
-                                script {
-                                    withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
-                                        sh '''#!/bin/bash
-                                            set -e
-                                            . .mldenv/bin/activate
-                                            python source/deploy.py Challenger Staging
-                                            python -c "
+        stage('Pre-prod Pipeline') {
+            when { branch 'main' } 
+            stages {
+                stage('Load and Test') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/test.py Challenger
+                                '''
+                            }
+                        }
+                    }
+                }
+                stage('Update Alias') {
+                    steps {
+                        script {
+                            withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
+                                sh '''#!/bin/bash
+                                    set -e
+                                    set -x
+                                    . .mldenv/bin/activate
+                                    python source/deploy.py Challenger Staging
+                                    python -c "
 import mlflow
 try:
     client = mlflow.tracking.MlflowClient()
@@ -123,17 +132,7 @@ try:
 except Exception as e:
     print(f'Error updating model alias: {e}')
 "
-                                        '''
-                                    }
-                                }
-                            }
-                        }
-
-                        stage('Notify Pre-Prod Complete') {
-                            steps {
-                                script {
-                                    notifyEmail('Pre-Production Pipeline Complete')
-                                }
+                                '''
                             }
                         }
                     }
@@ -160,18 +159,15 @@ try:
 except Exception as e:
     print(f'Error updating model alias: {e}')
 "
-                                        '''
-                                    }
-                                }
+                                '''
                             }
                         }
-
-                        stage('Notify Production Release') {
-                            steps {
-                                script {
-                                    notifyEmail('Production Release Deployed')
-                                }
-                            }
+                    }
+                }
+                stage('Notify Production Release') {
+                    steps {
+                        script {
+                            notifyEmail('Production Release Deployed')
                         }
                     }
                 }
