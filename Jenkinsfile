@@ -160,9 +160,7 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
 
         // Trigger this pipeline when a release tag (e.g., v1.0.1) is added
         stage('Production Pipeline') {
-            when { 
-                expression { env.GIT_BRANCH ==~ /^refs\/tags\/v\d+\.\d+\.\d+$/ } 
-            }
+            when { tag "v*" }
             stages {
                 stage('Deploy to Production') {
                     steps {
