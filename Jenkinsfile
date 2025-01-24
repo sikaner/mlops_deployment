@@ -54,6 +54,7 @@ pipeline {
             }
         }
 
+        // Trigger this pipeline when changes are pushed to the 'dev' branch
         stage('Development Pipeline') {
             when { branch 'dev' } 
             stages {
@@ -109,6 +110,7 @@ pipeline {
             }
         }
 
+        // Trigger this pipeline when changes are merged to the 'main' branch
         stage('Pre-prod Pipeline') {
             when { branch 'main' } 
             stages {
@@ -156,8 +158,11 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
             }
         }
 
+        // Trigger this pipeline when a release tag (e.g., v1.0.1) is added
         stage('Production Pipeline') {
-            when { expression { env.GIT_BRANCH.startsWith('refs/tags/release-1.0.0') } }
+            when { 
+                expression { env.GIT_BRANCH ==~ /refs\/tags\/v.*/ } 
+            }
             stages {
                 stage('Deploy to Production') {
                     steps {
@@ -203,4 +208,3 @@ client.set_registered_model_alias('iris_model', 'Champion', model_version)
         }
     }
 }
-//abc
