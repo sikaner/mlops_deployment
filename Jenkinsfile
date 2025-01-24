@@ -54,9 +54,8 @@ pipeline {
             }
         }
 
-        // Trigger this pipeline when changes are pushed to the 'dev' branch
         stage('Development Pipeline') {
-            when { branch 'dev' } 
+            when { branch 'dev' }
             stages {
                 stage('Train') {
                     steps {
@@ -110,9 +109,8 @@ pipeline {
             }
         }
 
-        // Trigger this pipeline when changes are merged to the 'main' branch
         stage('Pre-prod Pipeline') {
-            when { branch 'main' } 
+            when { branch 'main' }
             stages {
                 stage('Load and Test') {
                     steps {
@@ -158,14 +156,18 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
             }
         }
 
-        // Trigger this pipeline when a release tag (e.g., v1.0.1) is added
         stage('Production Pipeline') {
-            when { expression { env.GIT_TAG_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ } }
+            when {
+                allOf {
+                    branch 'main'
+                    expression { return env.GIT_TAG_NAME?.startsWith('v') }
+                }
+            }
             stages {
                 stage('Deploy to Production') {
                     steps {
-                        echo "Running Production Pipeline for Release ${env.GIT_TAG_NAME}"
                         script {
+                            echo "Running Production Pipeline for Release ${env.GIT_TAG_NAME}"
                             withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
                                 sh '''#!/bin/bash
                                     set -e
@@ -207,4 +209,3 @@ client.set_registered_model_alias('iris_model', 'Champion', model_version)
         }
     }
 }
-//abc
