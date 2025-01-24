@@ -15,9 +15,7 @@ pipeline {
             stages {
                 // Development Branch Pipeline
                 stage('Development Pipeline') {
-                    when { 
-                        branch 'dev' 
-                    }
+                    when { branch 'dev' }
                     stages {
                         stage('Setup Dev Environment') {
                             steps {
@@ -25,9 +23,13 @@ pipeline {
                                     withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
                                         sh '''#!/bin/bash
                                             set -e
-                                            python3 -m venv .mldenv
-                                            . .mldenv/bin/activate
-                                            pip install -r requirements.txt
+                                            if [ ! -d ".mldenv" ]; then
+                                                python3 -m venv .mldenv
+                                                . .mldenv/bin/activate
+                                                python3 -m ensurepip
+                                                pip install --upgrade pip
+                                                pip install -r requirements.txt
+                                            fi
                                         '''
                                     }
                                 }
@@ -88,9 +90,7 @@ pipeline {
 
                 // Main Branch (Pre-Production) Pipeline
                 stage('Pre-Production Pipeline') {
-                    when { 
-                        branch 'main' 
-                    }
+                    when { branch 'main' }
                     stages {
                         stage('Validate Staging Model') {
                             steps {
@@ -116,9 +116,12 @@ pipeline {
                                             python source/deploy.py Challenger Staging
                                             python -c "
 import mlflow
-client = mlflow.tracking.MlflowClient()
-model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
-client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
+try:
+    client = mlflow.tracking.MlflowClient()
+    model_version = client.get_latest_versions('iris_model', stages=['Staging'])[0].version
+    client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_version)
+except Exception as e:
+    print(f'Error updating model alias: {e}')
 "
                                         '''
                                     }
@@ -138,9 +141,7 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
 
                 // Production Release Pipeline
                 stage('Production Release Pipeline') {
-                    when { 
-                        tag 'v1.0.1' 
-                    }
+                    when { expression { env.GIT_TAG == 'v1.0.1' } }
                     stages {
                         stage('Deploy to Production') {
                             steps {
@@ -152,9 +153,12 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
                                             python source/deploy.py Challenger-post-test Production
                                             python -c "
 import mlflow
-client = mlflow.tracking.MlflowClient()
-model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
-client.set_registered_model_alias('iris_model', 'Champion', model_version)
+try:
+    client = mlflow.tracking.MlflowClient()
+    model_version = client.get_latest_versions('iris_model', stages=['Production'])[0].version
+    client.set_registered_model_alias('iris_model', 'Champion', model_version)
+except Exception as e:
+    print(f'Error updating model alias: {e}')
 "
                                         '''
                                     }
