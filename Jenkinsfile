@@ -160,10 +160,11 @@ client.set_registered_model_alias('iris_model', 'Challenger-post-test', model_ve
 
         // Trigger this pipeline when a release tag (e.g., v1.0.1) is added
         stage('Production Pipeline') {
-            when { tag "v*" }
+            when { expression { env.GIT_TAG_NAME =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ } }
             stages {
                 stage('Deploy to Production') {
                     steps {
+                        echo "Running Production Pipeline for Release ${env.GIT_TAG_NAME}"
                         script {
                             withAWS(credentials: 'aws-credentials-id', region: 'us-east-1') {
                                 sh '''#!/bin/bash
